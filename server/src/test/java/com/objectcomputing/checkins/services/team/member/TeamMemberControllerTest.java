@@ -22,9 +22,9 @@ import javax.inject.Inject;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static com.objectcomputing.checkins.services.role.RoleType.Constants.ADMIN_ROLE;
 import static com.objectcomputing.checkins.services.role.RoleType.Constants.MEMBER_ROLE;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 
 class TeamMemberControllerTest extends TestContainersSuite implements TeamFixture, MemberProfileFixture, TeamMemberFixture {
 
@@ -33,26 +33,69 @@ class TeamMemberControllerTest extends TestContainersSuite implements TeamFixtur
     HttpClient client;
 
     @Test
-    void testCreateATeamMember() {
+    void testCreateATeamMemberByAdmin() {
         Team team = createDeafultTeam();
         MemberProfile memberProfile = createADefaultMemberProfile();
 
-        TeamMemberResponseDTO TeamMemberResponseDTO = new TeamMemberResponseDTO(team.getId(), memberProfile.getId(), false);
-
-        final HttpRequest<TeamMemberResponseDTO> request = HttpRequest.POST("", TeamMemberResponseDTO).basicAuth(MEMBER_ROLE, MEMBER_ROLE);
+        TeamMemberCreateDTO teamMemberCreateDTO = new TeamMemberCreateDTO(team.getId(), memberProfile.getId(), false);
+        final HttpRequest<TeamMemberCreateDTO> request = HttpRequest.POST("", teamMemberCreateDTO).basicAuth("test@test.com", ADMIN_ROLE);
         final HttpResponse<TeamMember> response = client.toBlocking().exchange(request, TeamMember.class);
 
         TeamMember teamMember = response.body();
 
-        assertEquals(TeamMemberResponseDTO.getMemberid(), teamMember.getMemberid());
+        assertEquals(teamMemberCreateDTO.getMemberid(), teamMember.getMemberid());
         assertEquals(HttpStatus.CREATED, response.getStatus());
         assertEquals(String.format("%s/%s", request.getPath(), teamMember.getId()), response.getHeaders().get("location"));
+    }
 
+    @Test
+    void testCreateATeamMemberByTeamLead() {
+        Team team = createDeafultTeam();
+
+        // Create a team lead and add him to the team
+        MemberProfile memberProfileOfTeamLead = createADefaultMemberProfile();
+        createLeadTeamMember(team, memberProfileOfTeamLead);
+
+        // Create a member and add him to team
+        MemberProfile memberProfileOfUser = createAnUnrelatedUser();
+        TeamMemberCreateDTO teamMemberCreateDTO = new TeamMemberCreateDTO(team.getId(), memberProfileOfUser.getId(), false);
+        final HttpRequest<TeamMemberCreateDTO> request = HttpRequest.POST("", teamMemberCreateDTO).basicAuth(memberProfileOfTeamLead.getWorkEmail(), MEMBER_ROLE);
+        final HttpResponse<TeamMember> response = client.toBlocking().exchange(request, TeamMember.class);
+
+        TeamMember teamMember = response.body();
+
+        assertEquals(teamMemberCreateDTO.getMemberid(), teamMember.getMemberid());
+        assertEquals(HttpStatus.CREATED, response.getStatus());
+        assertEquals(String.format("%s/%s", request.getPath(), teamMember.getId()), response.getHeaders().get("location"));
+    }
+
+    @Test
+    void testCreateATeamMemberThrowsExceptionForNotAdminAndNotTeamLead() {
+        Team team = createDeafultTeam();
+
+        // Create a user (not team lead) and add him to the team
+        MemberProfile memberProfileOfTeammate = createADefaultMemberProfile();
+        createDeafultTeamMember(team, memberProfileOfTeammate);
+
+        // Create a member and add him to team
+        MemberProfile memberProfileOfUser = createAnUnrelatedUser();
+        TeamMemberCreateDTO teamMemberCreateDTO = new TeamMemberCreateDTO(team.getId(), memberProfileOfUser.getId(), false);
+        final HttpRequest<TeamMemberCreateDTO> request = HttpRequest.POST("", teamMemberCreateDTO).basicAuth(memberProfileOfTeammate.getWorkEmail(), MEMBER_ROLE);
+        HttpClientResponseException responseException = assertThrows(HttpClientResponseException.class,
+                                                        () -> client.toBlocking().exchange(request, Map.class));
+
+        JsonNode body = responseException.getResponse().getBody(JsonNode.class).orElse(null);
+        String error = Objects.requireNonNull(body).get("message").asText();
+        String href = Objects.requireNonNull(body).get("_links").get("self").get("href").asText();
+
+        assertEquals(request.getPath(), href);
+        assertEquals("You are not authorized to perform this operation", error);
+        assertEquals(HttpStatus.BAD_REQUEST, responseException.getStatus());
     }
 
     @Test
     void testCreateAnInvalidTeamMember() {
-        TeamMemberCreateDTO dto = new TeamMemberCreateDTO(null, (UUID)null, null);
+        TeamMemberCreateDTO dto = new TeamMemberCreateDTO(null, null, null);
 
         final HttpRequest<TeamMemberCreateDTO> request = HttpRequest.POST("", dto).basicAuth(MEMBER_ROLE, MEMBER_ROLE);
         HttpClientResponseException responseException = assertThrows(HttpClientResponseException.class,
@@ -176,7 +219,7 @@ class TeamMemberControllerTest extends TestContainersSuite implements TeamFixtur
 
         TeamMember teamMember = createDeafultTeamMember(team,memberProfile);
 
-        final HttpRequest<?> request = HttpRequest.GET(String.format("/")).basicAuth(MEMBER_ROLE, MEMBER_ROLE);
+        final HttpRequest<?> request = HttpRequest.GET("/").basicAuth(MEMBER_ROLE, MEMBER_ROLE);
         final HttpResponse<Set<TeamMember>> response = client.toBlocking().exchange(request, Argument.setOf(TeamMember.class));
 
         assertEquals(Set.of(teamMember), response.body());
@@ -245,18 +288,66 @@ class TeamMemberControllerTest extends TestContainersSuite implements TeamFixtur
     }
 
     @Test
-    void testUpdateTeamMember() {
+    void testUpdateTeamMemberByAdmin() {
+        Team team = createDeafultTeam();
+        MemberProfile memberProfile = createADefaultMemberProfile();
+        TeamMember teamMember = createDeafultTeamMember(team, memberProfile);
+
+        TeamMemberUpdateDTO teamMemberUpdateDTO = new TeamMemberUpdateDTO(teamMember.getId(), teamMember.getTeamid(), teamMember.getMemberid(), true);
+        final MutableHttpRequest<TeamMemberUpdateDTO> request = HttpRequest.PUT("", teamMemberUpdateDTO).basicAuth("test@test.com", ADMIN_ROLE);
+        final HttpResponse<TeamMember> response = client.toBlocking().exchange(request, TeamMember.class);
+
+        TeamMember result = response.body();
+        assertNotNull(result);
+        assertEquals(teamMember.getMemberid(), result.getMemberid());
+        assertTrue(result.isLead());
+        assertEquals(HttpStatus.OK, response.getStatus());
+        assertEquals(String.format("%s/%s", request.getPath(), teamMember.getId()), response.getHeaders().get("location"));
+    }
+
+    @Test
+    void testUpdateTeamMemberByTeamLead() {
+        Team team = createDeafultTeam();
+
+        // Create a team lead and add him to the team
+        MemberProfile memberProfileOfTeamLead = createADefaultMemberProfile();
+        createLeadTeamMember(team, memberProfileOfTeamLead);
+
+        // Create a member and add him to team
+        MemberProfile memberProfileOfUser = createAnUnrelatedUser();
+        TeamMember teamMember = createDeafultTeamMember(team, memberProfileOfUser);
+
+        // Update member
+        TeamMemberUpdateDTO teamMemberUpdateDTO = new TeamMemberUpdateDTO(teamMember.getId(), teamMember.getTeamid(), teamMember.getMemberid(), true);
+        final MutableHttpRequest<TeamMemberUpdateDTO> request = HttpRequest.PUT("", teamMemberUpdateDTO).basicAuth(memberProfileOfTeamLead.getWorkEmail(), MEMBER_ROLE);
+        final HttpResponse<TeamMember> response = client.toBlocking().exchange(request, TeamMember.class);
+
+        TeamMember result = response.body();
+        assertNotNull(result);
+        assertEquals(teamMember.getMemberid(), result.getMemberid());
+        assertTrue(result.isLead());
+        assertEquals(HttpStatus.OK, response.getStatus());
+        assertEquals(String.format("%s/%s", request.getPath(), teamMember.getId()), response.getHeaders().get("location"));
+    }
+
+    @Test
+    void testUpdateTeamMemberThrowsExceptionForNotAdminAndNotTeamLead() {
         Team team = createDeafultTeam();
         MemberProfile memberProfile = createADefaultMemberProfile();
 
         TeamMember teamMember = createDeafultTeamMember(team,memberProfile);
 
         final HttpRequest<TeamMember> request = HttpRequest.PUT("", teamMember).basicAuth(MEMBER_ROLE, MEMBER_ROLE);
-        final HttpResponse<TeamMember> response = client.toBlocking().exchange(request, TeamMember.class);
+        HttpClientResponseException responseException = assertThrows(HttpClientResponseException.class,
+                                                        () -> client.toBlocking().exchange(request, Map.class));
 
-        assertEquals(teamMember, response.body());
-        assertEquals(HttpStatus.OK, response.getStatus());
-        assertEquals(String.format("%s/%s", request.getPath(), teamMember.getId()), response.getHeaders().get("location"));
+        JsonNode body = responseException.getResponse().getBody(JsonNode.class).orElse(null);
+        String error = Objects.requireNonNull(body).get("message").asText();
+        String href = Objects.requireNonNull(body).get("_links").get("self").get("href").asText();
+
+        assertEquals(request.getPath(), href);
+        assertEquals("You are not authorized to perform this operation", error);
+        assertEquals(HttpStatus.BAD_REQUEST, responseException.getStatus());
     }
 
     @Test
@@ -365,7 +456,5 @@ class TeamMemberControllerTest extends TestContainersSuite implements TeamFixtur
         assertEquals(String.format("Unable to locate teamMember to update with id %s",teamMember.getId()),error);
         assertEquals(request.getPath(), href);
         assertEquals(HttpStatus.BAD_REQUEST, responseException.getStatus());
-
     }
-
 }

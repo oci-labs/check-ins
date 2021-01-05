@@ -1,5 +1,9 @@
 package com.objectcomputing.checkins.services.questions;
 
+import com.objectcomputing.checkins.services.exceptions.AlreadyExistsException;
+import com.objectcomputing.checkins.services.exceptions.BadArgException;
+import com.objectcomputing.checkins.services.exceptions.NotFoundException;
+
 import javax.inject.Singleton;
 import javax.validation.constraints.NotNull;
 import java.util.Set;
@@ -18,7 +22,7 @@ public class QuestionServicesImpl implements QuestionServices {
 
         Set<Question> returnedList = findByValue(question.getText());
         if (returnedList.size() >= 1) {
-            throw new QuestionDuplicateException("Already exists");
+            throw new AlreadyExistsException("Already exists");
         }
         return questionRepository.save(question);
 
@@ -29,12 +33,12 @@ public class QuestionServicesImpl implements QuestionServices {
     }
 
     public Question findById(@NotNull UUID id) {
-        return questionRepository.findById(id).orElseThrow(() -> new QuestionNotFoundException(String.format("No question for id %s", id)));
+        return questionRepository.findById(id).orElseThrow(() -> new NotFoundException(String.format("No question for id %s", id)));
     }
 
     protected Set<Question> findByValue(String text) {
         Set<Question> questionList = questionRepository.findAll();
-        if(text != null) {
+        if (text != null) {
             questionList.retainAll(findByText(text));
         }
 
@@ -42,7 +46,7 @@ public class QuestionServicesImpl implements QuestionServices {
     }
 
     public Set<Question> findByText(String text) {
-        String wildcard = "%" + text + "%" ;
+        String wildcard = "%" + text + "%";
         Set<Question> skillList = questionRepository.findByTextIlike(wildcard);
 
         return skillList;
@@ -52,8 +56,8 @@ public class QuestionServicesImpl implements QuestionServices {
         Question returned = null;
         try {
             findById(question.getId());
-        } catch (QuestionNotFoundException qnfe) {
-            throw new QuestionBadArgException("No question found for this id");
+        } catch (NotFoundException qnfe) {
+            throw new BadArgException("No question found for this id");
         }
         returned = questionRepository.update(question);
 
