@@ -24,6 +24,13 @@ public class TeamMemberUpdateDTO {
     @Schema(description = "Member who is on this team")
     private UUID memberid;
 
+    public TeamMemberUpdateDTO(UUID id, UUID teamid, UUID memberid, Boolean lead) {
+        this.id = id;
+        this.teamid = teamid;
+        this.memberid = memberid;
+        this.lead = lead;
+    }
+
     public UUID getId() {
         return id;
     }

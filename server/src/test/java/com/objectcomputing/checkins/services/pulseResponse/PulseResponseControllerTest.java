@@ -6,6 +6,7 @@ import com.objectcomputing.checkins.services.fixture.PulseResponseFixture;
 import com.objectcomputing.checkins.services.fixture.MemberProfileFixture;
 
 import com.objectcomputing.checkins.services.memberprofile.MemberProfile;
+import com.objectcomputing.checkins.util.Util;
 import io.micronaut.core.type.Argument;
 import io.micronaut.http.HttpRequest;
 import io.micronaut.http.HttpResponse;
@@ -163,7 +164,7 @@ public void testGetFindBySubmissionDateBetweenReturnsEmptyBody() {
     assertEquals(2, response.getContentLength());
 }
 
-// Find By findBySubmissionDateBetwe en
+// Find By findBySubmissionDateBetween
 @Test
 public void testGetFindByfindBySubmissionDateBetween() {
 
@@ -172,7 +173,7 @@ public void testGetFindByfindBySubmissionDateBetween() {
     PulseResponse pulseResponse  = createADefaultPulseResponse(memberProfile);
 
     LocalDate testDateFrom = LocalDate.of(2019, 01, 01);  
-    LocalDate testDateTo = LocalDate.of(2021, 01, 01);
+    LocalDate testDateTo = Util.MAX.toLocalDate();
 
     final HttpRequest<?> request = HttpRequest.GET(String.format("/?dateFrom=%tF&dateTo=%tF", testDateFrom, testDateTo)).basicAuth(MEMBER_ROLE,MEMBER_ROLE);
     final HttpResponse<Set<PulseResponse>> response = client.toBlocking().exchange(request, Argument.setOf(PulseResponse.class));

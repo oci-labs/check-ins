@@ -44,15 +44,6 @@ public class TeamController {
         this.ioExecutorService = ioExecutorService;
     }
 
-    @Error(exception = TeamBadArgException.class)
-    public HttpResponse<?> handleBadArgs(HttpRequest<?> request, TeamBadArgException e) {
-        JsonError error = new JsonError(e.getMessage())
-                .link(Link.SELF, Link.of(request.getUri()));
-
-        return HttpResponse.<JsonError>badRequest()
-                .body(error);
-    }
-
     @Error(exception = TeamNotFoundException.class)
     public HttpResponse<?> handleNotFound(HttpRequest<?> request, TeamNotFoundException e) {
         JsonError error = new JsonError(e.getMessage())
@@ -66,9 +57,8 @@ public class TeamController {
      * Create and save a new team
      *
      * @param team, {@link TeamCreateDTO}
-     * @return {@link HttpResponse<Team>}
+     * @return {@link HttpResponse<TeamResponseDTO>}
      */
-
     @Post()
     public Single<HttpResponse<TeamResponseDTO>> createATeam(@Body @Valid TeamCreateDTO team, HttpRequest<TeamCreateDTO> request) {
 

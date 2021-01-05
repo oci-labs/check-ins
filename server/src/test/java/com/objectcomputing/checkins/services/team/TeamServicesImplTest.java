@@ -1,5 +1,6 @@
 package com.objectcomputing.checkins.services.team;
 
+import com.objectcomputing.checkins.services.exceptions.BadArgException;
 import com.objectcomputing.checkins.services.team.member.TeamMemberRepository;
 import io.micronaut.test.annotation.MicronautTest;
 import org.junit.jupiter.api.BeforeAll;
@@ -69,7 +70,7 @@ class TeamServicesImplTest {
     void testSaveTeamNameExists() {
         Team teamEntity = new Team(null, "Disney", "World");
         when(teamRepository.findByName(eq(teamEntity.getName()))).thenReturn(Optional.of(teamEntity));
-        TeamBadArgException exception = assertThrows(TeamBadArgException.class, () -> services.save(new TeamCreateDTO(teamEntity.getName(), teamEntity.getDescription())));
+        BadArgException exception = assertThrows(BadArgException.class, () -> services.save(new TeamCreateDTO(teamEntity.getName(), teamEntity.getDescription())));
         assertTrue(exception.getMessage().contains(String.format("name %s already exists", teamEntity.getName())));
         verify(teamRepository, times(1)).findByName(any(String.class));
         verify(teamRepository, never()).save(any(Team.class));
@@ -95,7 +96,7 @@ class TeamServicesImplTest {
     @Test
     void testUpdateWithoutId() {
         Team teamEntity = new Team(null, "Bobby's", "World");
-        TeamBadArgException exception = assertThrows(TeamBadArgException.class, () -> services.update(
+        BadArgException exception = assertThrows(BadArgException.class, () -> services.update(
                 new TeamUpdateDTO(teamEntity.getId(), teamEntity.getName(), teamEntity.getDescription())));
         assertTrue(exception.getMessage().contains(String.format("%s does not exist", teamEntity.getId())));
         verify(teamRepository, never()).findById(any(UUID.class));
@@ -106,7 +107,7 @@ class TeamServicesImplTest {
     void testUpdateTeamDoesNotExist() {
         Team teamEntity = new Team(UUID.randomUUID(), "Wayne's", "World 2");
         when(teamRepository.findById(eq(teamEntity.getId()))).thenReturn(Optional.empty());
-        TeamBadArgException exception = assertThrows(TeamBadArgException.class, () -> services.update(
+        BadArgException exception = assertThrows(BadArgException.class, () -> services.update(
                 new TeamUpdateDTO(teamEntity.getId(), teamEntity.getName(), teamEntity.getDescription())));
         assertTrue(exception.getMessage().contains(String.format("%s does not exist", teamEntity.getId())));
         verify(teamRepository, times(1)).findById(any(UUID.class));
